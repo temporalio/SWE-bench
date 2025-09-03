@@ -147,6 +147,7 @@ For SWE-bench (Verified):
     year={2024},
     url={https://openreview.net/forum?id=VTF8yNQM66}
 }
+```
 
 For SWE-bench Multimodal
 ```bibtex
