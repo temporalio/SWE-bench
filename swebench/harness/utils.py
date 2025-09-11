@@ -2,6 +2,8 @@ import json
 import re
 import requests
 import traceback
+from importlib import resources
+import swebench.resources
 
 from argparse import ArgumentTypeError
 from concurrent.futures import ThreadPoolExecutor, as_completed
@@ -346,3 +348,21 @@ def ansi_escape(text: str) -> str:
     Remove ANSI escape sequences from text
     """
     return re.compile(r"\x1B(?:[@-Z\\-_]|\[[0-?]*[ -/]*[@-~])").sub("", text)
+
+
+def load_cached_environment_yml(instance_id: str) -> str:
+    """
+    Load environment.yml from cache
+    """
+    try:
+        repo, number = instance_id.rsplit("-", 1)
+    except ValueError:
+        return None
+    try:
+        return (
+            resources.files(swebench.resources)
+            .joinpath(f"swebench-og/{repo}/{number}/environment.yml")
+            .read_text()
+        )
+    except FileNotFoundError:
+        return None

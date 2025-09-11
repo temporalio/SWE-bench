@@ -284,6 +284,7 @@ def run_instances(
     timeout: int,
     namespace: str | None = "swebench",
     instance_image_tag: str = "latest",
+    env_image_tag: str = "latest",
     rewrite_reports: bool = False,
 ):
     """
@@ -303,7 +304,10 @@ def run_instances(
     test_specs = list(
         map(
             lambda instance: make_test_spec(
-                instance, namespace=namespace, instance_image_tag=instance_image_tag
+                instance,
+                namespace=namespace,
+                instance_image_tag=instance_image_tag,
+                env_image_tag=env_image_tag,
             ),
             instances,
         )
@@ -483,6 +487,7 @@ def main(
     rewrite_reports: bool,
     modal: bool,
     instance_image_tag: str = "latest",
+    env_image_tag: str = "latest",
     report_dir: str = ".",
 ):
     """
@@ -535,7 +540,15 @@ def main(
     else:
         # build environment images + run instances
         if namespace is None and not rewrite_reports:
-            build_env_images(client, dataset, force_rebuild, max_workers)
+            build_env_images(
+                client,
+                dataset,
+                force_rebuild,
+                max_workers,
+                namespace,
+                instance_image_tag,
+                env_image_tag,
+            )
         run_instances(
             predictions,
             dataset,
@@ -547,12 +560,21 @@ def main(
             timeout,
             namespace=namespace,
             instance_image_tag=instance_image_tag,
+            env_image_tag=env_image_tag,
             rewrite_reports=rewrite_reports,
         )
 
     # clean images + make final report
     clean_images(client, existing_images, cache_level, clean)
-    return make_run_report(predictions, full_dataset, run_id, client)
+    return make_run_report(
+        predictions,
+        full_dataset,
+        run_id,
+        client,
+        namespace,
+        instance_image_tag,
+        env_image_tag,
+    )
 
 
 if __name__ == "__main__":
@@ -634,6 +656,9 @@ if __name__ == "__main__":
     )
     parser.add_argument(
         "--instance_image_tag", type=str, default="latest", help="Instance image tag"
+    )
+    parser.add_argument(
+        "--env_image_tag", type=str, default="latest", help="Environment image tag"
     )
     parser.add_argument(
         "--rewrite_reports",

@@ -674,7 +674,9 @@ class LlamaModel(LlamaPreTrainedModel):
                     all_hidden_states += (hidden_states,)
 
             past_key_value = (
-                past_key_values[idx] if past_key_values is not None and idx < len(past_key_values) else None
+                past_key_values[idx]
+                if past_key_values is not None and idx < len(past_key_values)
+                else None
             )
 
             if self.gradient_checkpointing and self.training:

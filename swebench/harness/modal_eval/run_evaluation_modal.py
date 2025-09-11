@@ -199,7 +199,7 @@ class ModalSandboxRuntime:
                 "adduser --disabled-password --gecos 'dog' nonroot",
             )
             .add_local_file(
-Path(remote_env_script_path), remote_env_script_path, copy=True
+                Path(remote_env_script_path), remote_env_script_path, copy=True
             )
             .add_local_file(
                 Path(remote_repo_script_path), remote_repo_script_path, copy=True

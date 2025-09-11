@@ -13,8 +13,9 @@ from swebench.harness.constants import (
     SWE_BENCH_URL_RAW,
     START_TEST_OUTPUT,
     END_TEST_OUTPUT,
+    REPO_BASE_COMMIT_BRANCH,
 )
-from swebench.harness.utils import get_modified_files
+from swebench.harness.utils import get_modified_files, load_cached_environment_yml
 from functools import cache
 
 HEADERS = {
@@ -267,13 +268,24 @@ def make_repo_script_list_py(
     Create a list of bash commands to set up the repository for testing.
     This is the setup script for the instance image.
     """
+    branch = REPO_BASE_COMMIT_BRANCH.get(repo, {}).get(base_commit, "")
+    branch = f"--branch {branch}" if branch else ""
     setup_commands = [
-        f"git clone -o origin https://github.com/{repo} {repo_directory}",
+        f"git clone -o origin {branch} --single-branch https://github.com/{repo} {repo_directory}",
         f"chmod -R 777 {repo_directory}",  # So nonroot user can run tests
         f"cd {repo_directory}",
         f"git reset --hard {base_commit}",
-        # Remove the remote so the agent won't see newer commits.
+        # Remove the remote and tags so the agent won't see newer commits.
         "git remote remove origin",
+        # Remove only tags pointing to commits after target timestamp
+        f"TARGET_TIMESTAMP=$(git show -s --format=%ci {base_commit})",
+        'git tag -l | while read tag; do TAG_COMMIT=$(git rev-list -n 1 "$tag"); TAG_TIME=$(git show -s --format=%ci "$TAG_COMMIT"); if [[ "$TAG_TIME" > "$TARGET_TIMESTAMP" ]]; then git tag -d "$tag"; fi; done',
+        "git reflog expire --expire=now --all",
+        "git gc --prune=now --aggressive",
+        # Verify future logs aren't available
+        "AFTER_TIMESTAMP=$(date -d \"$TARGET_TIMESTAMP + 1 second\" '+%Y-%m-%d %H:%M:%S')",
+        'COMMIT_COUNT=$(git log --oneline --all --since="$AFTER_TIMESTAMP" | wc -l)',
+        '[ "$COMMIT_COUNT" -eq 0 ] || exit 1',
         # Make sure conda is available for later use
         "source /opt/miniconda3/bin/activate",
         f"conda activate {env_name}",
@@ -305,11 +317,29 @@ def make_repo_script_list_py(
     return setup_commands
 
 
+def make_env_script_list_py_from_conda(
+    instance, specs, env_name, cached_environment_yml
+) -> list:
+    HEREDOC_DELIMITER = "EOF_59812759871"
+    reqs_commands = [
+        "source /opt/miniconda3/bin/activate",
+        f"cat <<'{HEREDOC_DELIMITER}' > /root/environment.yml\n{cached_environment_yml}\n{HEREDOC_DELIMITER}",
+        "conda env create -f /root/environment.yml",
+        f"conda activate {env_name}",
+    ]
+    return reqs_commands
+
+
 def make_env_script_list_py(instance, specs, env_name) -> list:
     """
     Creates the list of commands to set up the conda environment for testing.
     This is the setup script for the environment image.
     """
+    cached_environment_yml = load_cached_environment_yml(instance["instance_id"])
+    if cached_environment_yml:
+        return make_env_script_list_py_from_conda(
+            instance, specs, env_name, cached_environment_yml
+        )
     HEREDOC_DELIMITER = "EOF_59812759871"
     reqs_commands = [
         "source /opt/miniconda3/bin/activate",
