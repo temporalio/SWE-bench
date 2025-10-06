@@ -11,6 +11,8 @@ from swebench.harness.constants.python import *
 from swebench.harness.constants.ruby import *
 from swebench.harness.constants.rust import *
 
+import os
+
 
 # Constants - Evaluation Log Directories
 BASE_IMAGE_BUILD_DIR = Path("logs/build_images/base")
@@ -34,6 +36,7 @@ class SWEbenchInstance(TypedDict):
     FAIL_TO_PASS: str
     PASS_TO_PASS: str
     environment_setup_commit: str
+    test_cmd: list[str] | None  # Optional per-task test command(s)
 
 
 # Constants - Test Types, Statuses, Commands
@@ -50,6 +53,7 @@ class ResolvedStatus(Enum):
 
 
 class TestStatus(Enum):
+    __test__ = False
     FAILED = "FAILED"
     PASSED = "PASSED"
     SKIPPED = "SKIPPED"
@@ -126,6 +130,8 @@ DEFAULT_DOCKER_SPECS = {
     "python_version": "3.9",
     "ubuntu_version": "22.04",
 }
+if "ANTHROPIC_API_KEY" in os.environ:
+    DEFAULT_DOCKER_SPECS["anthropic_api_key"] = os.environ["ANTHROPIC_API_KEY"]
 FAIL_ONLY_REPOS = {
     "chartjs/Chart.js",
     "processing/p5.js",

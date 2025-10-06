@@ -26,6 +26,8 @@ from swebench.harness.constants import (
     LOG_REPORT,
     LOG_INSTANCE,
     LOG_TEST_OUTPUT,
+    MAP_REPO_TO_EXT,
+    MAP_REPO_VERSION_TO_SPECS,
     RUN_EVALUATION_LOG_DIR,
     UTF8,
 )
@@ -489,6 +491,8 @@ def main(
     instance_image_tag: str = "latest",
     env_image_tag: str = "latest",
     report_dir: str = ".",
+    repo_specs_override: str | None = None,
+    repo_ext_override: str | None = None,
 ):
     """
     Run evaluation harness for the given dataset and predictions.
@@ -499,6 +503,40 @@ def main(
             "Please check out sb-cli (https://github.com/swe-bench/sb-cli/) for instructions on how to submit predictions."
         )
         return
+
+    # Load repo specs override if provided
+    if repo_specs_override:
+        try:
+            with open(repo_specs_override, 'r') as f:
+                override_specs = json.load(f)
+            
+            # Update the global MAP_REPO_VERSION_TO_SPECS with override data
+            MAP_REPO_VERSION_TO_SPECS.update(override_specs)
+            print(f"Loaded repository specification overrides from {repo_specs_override}")
+            print(f"Updated specifications for {len(override_specs)} repositories")
+        except FileNotFoundError:
+            raise ValueError(f"Repository specs override file not found: {repo_specs_override}")
+        except json.JSONDecodeError as e:
+            raise ValueError(f"Invalid JSON in repository specs override file: {e}")
+        except Exception as e:
+            raise ValueError(f"Error loading repository specs override file: {e}")
+
+    # Load repo extension override if provided
+    if repo_ext_override:
+        try:
+            with open(repo_ext_override, 'r') as f:
+                override_exts = json.load(f)
+            
+            # Update the global MAP_REPO_TO_EXT with override data
+            MAP_REPO_TO_EXT.update(override_exts)
+            print(f"Loaded repository extension overrides from {repo_ext_override}")
+            print(f"Updated extensions for {len(override_exts)} repositories")
+        except FileNotFoundError:
+            raise ValueError(f"Repository extension override file not found: {repo_ext_override}")
+        except json.JSONDecodeError as e:
+            raise ValueError(f"Invalid JSON in repository extension override file: {e}")
+        except Exception as e:
+            raise ValueError(f"Error loading repository extension override file: {e}")
 
     # set open file limit
     assert len(run_id) > 0, "Run ID must be provided"
@@ -668,6 +706,16 @@ if __name__ == "__main__":
     )
     parser.add_argument(
         "--report_dir", type=str, default=".", help="Directory to write reports to"
+    )
+    parser.add_argument(
+        "--repo_specs_override",
+        type=str,
+        help="Path to JSON file containing repository specification overrides for MAP_REPO_VERSION_TO_SPECS"
+    )
+    parser.add_argument(
+        "--repo_ext_override",
+        type=str,
+        help="Path to JSON file containing repository extension overrides for MAP_REPO_TO_EXT"
     )
 
     # Modal execution args
