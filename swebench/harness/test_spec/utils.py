@@ -10,6 +10,23 @@ from swebench.harness.utils import get_modified_files
 
 
 def get_test_cmds(instance) -> list:
+    """
+    Get test commands for a task instance.
+    
+    First checks if the instance has per-task test commands specified.
+    If not, falls back to the repository/version-level test commands.
+    
+    Args:
+        instance: Task instance dictionary
+        
+    Returns:
+        List of test command strings
+    """
+    # Check for per-task test commands first
+    if "test_cmd" in instance and instance["test_cmd"] is not None:
+        return instance["test_cmd"]
+    
+    # Fall back to repository/version-level test commands
     test_cmd = MAP_REPO_VERSION_TO_SPECS[instance["repo"]][instance["version"]][
         "test_cmd"
     ]

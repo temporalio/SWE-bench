@@ -36,6 +36,7 @@ class SWEbenchInstance(TypedDict):
     FAIL_TO_PASS: str
     PASS_TO_PASS: str
     environment_setup_commit: str
+    test_cmd: list[str] | None  # Optional per-task test command(s)
 
 
 # Constants - Test Types, Statuses, Commands
@@ -52,6 +53,7 @@ class ResolvedStatus(Enum):
 
 
 class TestStatus(Enum):
+    __test__ = False
     FAILED = "FAILED"
     PASSED = "PASSED"
     SKIPPED = "SKIPPED"
