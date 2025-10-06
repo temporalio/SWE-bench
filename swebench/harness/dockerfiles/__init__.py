@@ -33,6 +33,10 @@ from swebench.harness.dockerfiles.rust import (
     _DOCKERFILE_BASE_RUST,
     _DOCKERFILE_INSTANCE_RUST,
 )
+from swebench.harness.dockerfiles.agnostic import (
+    _DOCKERFILE_BASE_AGNOSTIC,
+    _DOCKERFILE_INSTANCE_AGNOSTIC,
+)
 
 _DOCKERFILE_BASE = {
     "c": _DOCKERFILE_BASE_C,
@@ -43,6 +47,7 @@ _DOCKERFILE_BASE = {
     "php": _DOCKERFILE_BASE_PHP,
     "rb": _DOCKERFILE_BASE_RUBY,
     "rs": _DOCKERFILE_BASE_RUST,
+    "agnostic": _DOCKERFILE_BASE_AGNOSTIC,
 }
 
 _DOCKERFILE_ENV = {
@@ -59,6 +64,7 @@ _DOCKERFILE_INSTANCE = {
     "php": _DOCKERFILE_INSTANCE_PHP,
     "rb": _DOCKERFILE_INSTANCE_RUBY,
     "rs": _DOCKERFILE_INSTANCE_RUST,
+    "agnostic": _DOCKERFILE_INSTANCE_AGNOSTIC,
 }
 
 

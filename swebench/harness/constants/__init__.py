@@ -11,6 +11,8 @@ from swebench.harness.constants.python import *
 from swebench.harness.constants.ruby import *
 from swebench.harness.constants.rust import *
 
+import os
+
 
 # Constants - Evaluation Log Directories
 BASE_IMAGE_BUILD_DIR = Path("logs/build_images/base")
@@ -126,6 +128,8 @@ DEFAULT_DOCKER_SPECS = {
     "python_version": "3.9",
     "ubuntu_version": "22.04",
 }
+if "ANTHROPIC_API_KEY" in os.environ:
+    DEFAULT_DOCKER_SPECS["anthropic_api_key"] = os.environ["ANTHROPIC_API_KEY"]
 FAIL_ONLY_REPOS = {
     "chartjs/Chart.js",
     "processing/p5.js",
