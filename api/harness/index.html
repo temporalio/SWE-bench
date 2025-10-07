@@ -32995,7 +32995,9 @@ Also reports on images and containers that may still running if client is provid
 <span class="normal">272</span>
 <span class="normal">273</span>
 <span class="normal">274</span>
-<span class="normal">275</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">run_instance</span><span class="p">(</span>
+<span class="normal">275</span>
+<span class="normal">276</span>
+<span class="normal">277</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">run_instance</span><span class="p">(</span>
     <span class="n">test_spec</span><span class="p">:</span> <span class="n">TestSpec</span><span class="p">,</span>
     <span class="n">pred</span><span class="p">:</span> <span class="nb">dict</span><span class="p">,</span>
     <span class="n">rm_image</span><span class="p">:</span> <span class="nb">bool</span><span class="p">,</span>
@@ -33084,11 +33086,13 @@ Also reports on images and containers that may still running if client is provid
 
         <span class="c1"># Copy model prediction as patch file to container</span>
         <span class="n">patch_file</span> <span class="o">=</span> <span class="n">Path</span><span class="p">(</span><span class="n">log_dir</span> <span class="o">/</span> <span class="s2">"patch.diff"</span><span class="p">)</span>
-        <span class="n">patch_file</span><span class="o">.</span><span class="n">write_text</span><span class="p">(</span><span class="n">pred</span><span class="p">[</span><span class="n">KEY_PREDICTION</span><span class="p">]</span> <span class="ow">or</span> <span class="s2">""</span><span class="p">)</span>
+        <span class="n">patch_str</span> <span class="o">=</span> <span class="n">pred</span><span class="p">[</span><span class="n">KEY_PREDICTION</span><span class="p">]</span> <span class="o">+</span> <span class="s2">"</span><span class="se">\n</span><span class="s2">"</span>
+        <span class="n">patch_file</span><span class="o">.</span><span class="n">write_text</span><span class="p">(</span><span class="n">patch_str</span> <span class="ow">or</span> <span class="s2">""</span><span class="p">)</span>
         <span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span>
             <span class="sa">f</span><span class="s2">"Intermediate patch for </span><span class="si">{</span><span class="n">instance_id</span><span class="si">}</span><span class="s2"> written to </span><span class="si">{</span><span class="n">patch_file</span><span class="si">}</span><span class="s2">, now applying to container..."</span>
         <span class="p">)</span>
         <span class="n">copy_to_container</span><span class="p">(</span><span class="n">container</span><span class="p">,</span> <span class="n">patch_file</span><span class="p">,</span> <span class="n">PurePosixPath</span><span class="p">(</span><span class="n">DOCKER_PATCH</span><span class="p">))</span>
+
 
         <span class="c1"># Attempt to apply patch to container (TODO: FIX THIS)</span>
         <span class="n">applied_patch</span> <span class="o">=</span> <span class="kc">False</span>
@@ -33365,9 +33369,7 @@ Also reports on images and containers that may still running if client is provid
 
             <details class="quote">
               <summary>Source code in <code>swebench/harness/run_evaluation.py</code></summary>
-              <div class="highlight"><table class="highlighttable"><tbody><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">278</span>
-<span class="normal">279</span>
-<span class="normal">280</span>
+              <div class="highlight"><table class="highlighttable"><tbody><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">280</span>
 <span class="normal">281</span>
 <span class="normal">282</span>
 <span class="normal">283</span>
@@ -33460,7 +33462,9 @@ Also reports on images and containers that may still running if client is provid
 <span class="normal">370</span>
 <span class="normal">371</span>
 <span class="normal">372</span>
-<span class="normal">373</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">run_instances</span><span class="p">(</span>
+<span class="normal">373</span>
+<span class="normal">374</span>
+<span class="normal">375</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">run_instances</span><span class="p">(</span>
     <span class="n">predictions</span><span class="p">:</span> <span class="nb">dict</span><span class="p">,</span>
     <span class="n">instances</span><span class="p">:</span> <span class="nb">list</span><span class="p">,</span>
     <span class="n">cache_level</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
@@ -33582,9 +33586,7 @@ If exclude_completed is True, only return instances that have not been run yet.<
 
             <details class="quote">
               <summary>Source code in <code>swebench/harness/run_evaluation.py</code></summary>
-              <div class="highlight"><table class="highlighttable"><tbody><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">376</span>
-<span class="normal">377</span>
-<span class="normal">378</span>
+              <div class="highlight"><table class="highlighttable"><tbody><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">378</span>
 <span class="normal">379</span>
 <span class="normal">380</span>
 <span class="normal">381</span>
@@ -33679,7 +33681,9 @@ If exclude_completed is True, only return instances that have not been run yet.<
 <span class="normal">470</span>
 <span class="normal">471</span>
 <span class="normal">472</span>
-<span class="normal">473</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">get_dataset_from_preds</span><span class="p">(</span>
+<span class="normal">473</span>
+<span class="normal">474</span>
+<span class="normal">475</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">get_dataset_from_preds</span><span class="p">(</span>
     <span class="n">dataset_name</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
     <span class="n">split</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
     <span class="n">instance_ids</span><span class="p">:</span> <span class="nb">list</span><span class="p">,</span>
@@ -33801,9 +33805,7 @@ If exclude_completed is True, only return instances that have not been run yet.<
 
             <details class="quote">
               <summary>Source code in <code>swebench/harness/run_evaluation.py</code></summary>
-              <div class="highlight"><table class="highlighttable"><tbody><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">476</span>
-<span class="normal">477</span>
-<span class="normal">478</span>
+              <div class="highlight"><table class="highlighttable"><tbody><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">478</span>
 <span class="normal">479</span>
 <span class="normal">480</span>
 <span class="normal">481</span>
@@ -33940,7 +33942,9 @@ If exclude_completed is True, only return instances that have not been run yet.<
 <span class="normal">612</span>
 <span class="normal">613</span>
 <span class="normal">614</span>
-<span class="normal">615</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">main</span><span class="p">(</span>
+<span class="normal">615</span>
+<span class="normal">616</span>
+<span class="normal">617</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">main</span><span class="p">(</span>
     <span class="n">dataset_name</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
     <span class="n">split</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
     <span class="n">instance_ids</span><span class="p">:</span> <span class="nb">list</span><span class="p">,</span>
