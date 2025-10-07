@@ -159,11 +159,13 @@ def run_instance(
 
         # Copy model prediction as patch file to container
         patch_file = Path(log_dir / "patch.diff")
-        patch_file.write_text(pred[KEY_PREDICTION] or "")
+        patch_str = pred[KEY_PREDICTION] + "\n"
+        patch_file.write_text(patch_str or "")
         logger.info(
             f"Intermediate patch for {instance_id} written to {patch_file}, now applying to container..."
         )
         copy_to_container(container, patch_file, PurePosixPath(DOCKER_PATCH))
+
 
         # Attempt to apply patch to container (TODO: FIX THIS)
         applied_patch = False
