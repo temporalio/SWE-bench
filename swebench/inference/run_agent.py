@@ -62,6 +62,7 @@ def run_agent_on_instance(
     run_id: str,
     timeout: int = 1800,
     force_rebuild: bool = False,
+    agents_md: Optional[str] = None,
 ) -> Dict:
     """
     Run the coding agent on a single instance.
@@ -74,6 +75,7 @@ def run_agent_on_instance(
         run_id (str): Run ID for container naming
         timeout (int): Timeout in seconds for agent execution
         force_rebuild (bool): Whether to force rebuild container images
+        agents_md (Optional[str]): Path to file to copy as AGENTS.md in container
         
     Returns:
         Dict: Result containing instance_id, model_patch, and metadata
@@ -109,6 +111,16 @@ def run_agent_on_instance(
             copy_to_container(container, Path(tmp_file_path), PurePosixPath(problem_file_path))
             logger_instance.info(f"Problem statement copied to container at {problem_file_path}")
             
+            # Copy agents_md file to container if provided
+            if agents_md:
+                agents_md_path = Path(agents_md)
+                if not agents_md_path.exists():
+                    logger_instance.warning(f"AGENTS.md file not found: {agents_md}")
+                else:
+                    container_agents_md_path = PurePosixPath(DOCKER_WORKDIR) / "AGENTS.md"
+                    copy_to_container(container, agents_md_path, container_agents_md_path)
+                    logger_instance.info(f"AGENTS.md file copied to container at {container_agents_md_path}")
+            
             # Replace $PROBLEM_STATEMENT placeholder in agent command
             actual_command = agent_command.replace("$PROBLEM_STATEMENT", problem_file_path)
             logger_instance.info(f"Running agent command: {actual_command}")
@@ -136,7 +148,7 @@ def run_agent_on_instance(
                 
             # Get git diff to see what changes the agent made
             git_diff_result = container.exec_run(
-                "bash -c 'git add -N . && git -c core.fileMode=false diff'",
+                'bash -c "git add -N . && git -c core.fileMode=false diff -- . \':(exclude)swebench/\'"',
                 workdir=DOCKER_WORKDIR,
                 user=DOCKER_USER
             )
@@ -198,6 +210,7 @@ def run_agent_inference(
     instance_image_tag: str = "latest",
     env_image_tag: str = "latest",
     existing_ids: Optional[set] = None,
+    agents_md: Optional[str] = None,
 ) -> None:
     """
     Run agent inference on the entire dataset.
@@ -214,6 +227,7 @@ def run_agent_inference(
         instance_image_tag (str): Tag for instance images
         env_image_tag (str): Tag for environment images
         existing_ids (Optional[set]): Set of already processed instance IDs
+        agents_md (Optional[str]): Path to file to copy as AGENTS.md in container
     """
     if existing_ids is None:
         existing_ids = set()
@@ -265,7 +279,7 @@ def run_agent_inference(
             for test_spec, instance in tqdm(test_specs, desc="Processing instances"):
                 result = run_agent_on_instance(
                     test_spec, instance, agent_name, agent_command, client, run_id, 
-                    timeout=timeout, force_rebuild=force_rebuild
+                    timeout=timeout, force_rebuild=force_rebuild, agents_md=agents_md
                 )
                 print(json.dumps(result), file=f, flush=True)
         else:
@@ -276,7 +290,7 @@ def run_agent_inference(
                     future = executor.submit(
                         run_agent_on_instance,
                         test_spec, instance, agent_name, agent_command, client, run_id,
-                        timeout, force_rebuild
+                        timeout, force_rebuild, agents_md
                     )
                     futures[future] = instance[KEY_INSTANCE_ID]
                 
@@ -311,6 +325,7 @@ def main(
     instance_ids: Optional[List[str]] = None,
     repo_specs_override: Optional[str] = None,
     repo_ext_override: Optional[str] = None,
+    agents_md: Optional[str] = None,
 ):
     """
     Main function to run agent inference on SWE-bench dataset.
@@ -390,6 +405,7 @@ def main(
         instance_image_tag=instance_image_tag,
         env_image_tag=env_image_tag,
         existing_ids=existing_ids,
+        agents_md=agents_md,
     )
     
     logger.info(f"Agent inference completed. Results written to {output_file}")
@@ -485,6 +501,11 @@ if __name__ == "__main__":
         type=str,
         help="Path to JSON file containing repository extension overrides for MAP_REPO_TO_EXT"
     )
+    parser.add_argument(
+        "--agents_md",
+        type=str,
+        help="Path to a file to copy into the container as AGENTS.md"
+    )
     
     args = parser.parse_args()
     
@@ -503,5 +524,6 @@ if __name__ == "__main__":
         instance_ids=args.instance_ids,
         repo_specs_override=args.repo_specs_override,
         repo_ext_override=args.repo_ext_override,
+        agents_md=args.agents_md,
     )
 
