@@ -22,6 +22,7 @@ def make_run_report(
     namespace: str = None,
     instance_image_tag: str = "latest",
     env_image_tag: str = "latest",
+    report_dir: Optional[Path] = None,
 ) -> Path:
     """
     Make a final evaluation and run report of the instances that have been run.
@@ -154,6 +155,8 @@ def make_run_report(
         + f".{run_id}"
         + ".json"
     )
+    if report_dir:
+        report_file = report_dir / report_file
     with open(report_file, "w") as f:
         print(json.dumps(report, indent=4), file=f)
     print(f"Report written to {report_file}")
