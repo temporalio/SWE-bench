@@ -79,7 +79,7 @@ def run_instance(
     run_id: str,
     timeout: int | None = None,
     rewrite_reports: bool = False,
-    cp: list | None = None,
+    instance: dict | None = None,
 ) -> dict:
     """
     Run a single instance with the given prediction.
@@ -190,22 +190,26 @@ def run_instance(
                 logger,
             )
 
-        # Copy additional files if specified
-        if cp:
-            for host_path, guest_path in cp:
-                host_file = Path(host_path)
-                if not host_file.exists():
-                    logger.error(f"Host file {host_path} does not exist, skipping copy")
-                    continue
-                
-                # Convert guest_path to be relative to DOCKER_WORKDIR
-                if guest_path.startswith('/'):
-                    container_path = PurePosixPath(guest_path)
-                else:
-                    container_path = PurePosixPath(DOCKER_WORKDIR) / guest_path
-                
-                logger.info(f"Copying {host_path} to {container_path} in container...")
-                copy_to_container(container, host_file, container_path)
+        # Copy additional files if specified in the dataset instance
+        if instance and "cp" in instance:
+            cp_dict = instance["cp"]
+            if isinstance(cp_dict, dict):
+                for host_path, guest_path in cp_dict.items():
+                    host_file = Path(host_path)
+                    if not host_file.exists():
+                        logger.error(f"Host file {host_path} does not exist, skipping copy")
+                        continue
+                    
+                    # Convert guest_path to be relative to DOCKER_WORKDIR
+                    if guest_path.startswith('/'):
+                        container_path = PurePosixPath(guest_path)
+                    else:
+                        container_path = PurePosixPath(DOCKER_WORKDIR) / guest_path
+                    
+                    logger.info(f"Copying {host_path} to {container_path} in container...")
+                    copy_to_container(container, host_file, container_path)
+            else:
+                logger.warning(f"Instance {instance_id} has 'cp' field but it's not a dictionary, skipping file copies")
 
         # Get git diff before running eval script
         git_diff_output_before = (
@@ -308,7 +312,6 @@ def run_instances(
     instance_image_tag: str = "latest",
     env_image_tag: str = "latest",
     rewrite_reports: bool = False,
-    cp: list | None = None,
 ):
     """
     Run all instances for the given predictions in parallel.
@@ -351,7 +354,7 @@ def run_instances(
 
     # run instances in parallel
     payloads = []
-    for test_spec in test_specs:
+    for test_spec, instance in zip(test_specs, instances):
         payloads.append(
             (
                 test_spec,
@@ -367,7 +370,7 @@ def run_instances(
                 run_id,
                 timeout,
                 rewrite_reports,
-                cp,
+                instance,
             )
         )
 
@@ -515,7 +518,6 @@ def main(
     report_dir: str = ".",
     repo_specs_override: str | None = None,
     repo_ext_override: str | None = None,
-    cp: list | None = None,
 ):
     """
     Run evaluation harness for the given dataset and predictions.
@@ -623,7 +625,6 @@ def main(
             instance_image_tag=instance_image_tag,
             env_image_tag=env_image_tag,
             rewrite_reports=rewrite_reports,
-            cp=cp,
         )
 
     # clean images + make final report
@@ -746,14 +747,6 @@ if __name__ == "__main__":
     # Modal execution args
     parser.add_argument("--modal", type=str2bool, default=False, help="Run on Modal")
 
-    # File copy args
-    parser.add_argument(
-        "--cp",
-        nargs=2,
-        action="append",
-        metavar=("HOST_PATH", "GUEST_PATH"),
-        help="Copy file from host_path to guest_path in container (relative to workdir). Can be used multiple times.",
-    )
 
     args = parser.parse_args()
     main(**vars(args))
