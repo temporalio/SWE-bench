@@ -2,6 +2,7 @@ import hashlib
 import json
 
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Any, Optional, Union, cast
 
 from swebench.harness.constants import (
@@ -22,6 +23,73 @@ from swebench.harness.test_spec.create_scripts import (
     make_env_script_list,
     make_eval_script_list,
 )
+
+
+def load_dockerfile_content(dockerfile_spec) -> str | None:
+    """
+    Load Dockerfile content from a specification dict.
+    
+    The dockerfile_spec should be a dict with exactly one of:
+    - {"path": "path/to/dockerfile"} - load from file
+    - {"contents": "FROM ubuntu:22.04..."} - use directly
+    
+    Args:
+        dockerfile_spec: Dict with 'path' or 'contents', or None
+        
+    Returns:
+        Dockerfile content as string, or None if dockerfile_spec is None
+        
+    Raises:
+        ValueError: If dockerfile_spec format is invalid
+        FileNotFoundError: If path is specified but file doesn't exist
+    """
+    if dockerfile_spec is None:
+        return None
+    
+    if not isinstance(dockerfile_spec, dict):
+        raise ValueError(
+            f"dockerfile_spec must be a dict with 'path' or 'contents', got {type(dockerfile_spec).__name__}"
+        )
+    
+    has_path = "path" in dockerfile_spec
+    has_contents = "contents" in dockerfile_spec
+    
+    if has_path and has_contents:
+        raise ValueError(
+            "dockerfile_spec cannot specify both 'path' and 'contents'. "
+            "Use either {'path': '...'} or {'contents': '...'}"
+        )
+    
+    if not has_path and not has_contents:
+        raise ValueError(
+            "dockerfile_spec must specify either 'path' or 'contents'. "
+            "Got: " + str(dockerfile_spec)
+        )
+    
+    if has_path:
+        path = Path(dockerfile_spec["path"])
+        if not path.exists():
+            raise FileNotFoundError(
+                f"Dockerfile not found at path: {path}\n"
+                f"Specified in dockerfile_spec: {dockerfile_spec}"
+            )
+        if not path.is_file():
+            raise ValueError(
+                f"Dockerfile path is not a file: {path}\n"
+                f"Specified in dockerfile_spec: {dockerfile_spec}"
+            )
+        return path.read_text()
+    
+    if has_contents:
+        contents = dockerfile_spec["contents"]
+        if not isinstance(contents, str):
+            raise ValueError(
+                f"dockerfile_spec 'contents' must be a string, got {type(contents).__name__}"
+            )
+        return contents
+    
+    # Should never reach here due to earlier checks
+    raise ValueError(f"Invalid dockerfile_spec: {dockerfile_spec}")
 
 
 @dataclass
@@ -45,6 +113,9 @@ class TestSpec:
     base_image_tag: str = LATEST
     env_image_tag: str = LATEST
     instance_image_tag: str = LATEST
+    custom_dockerfile_base: Optional[str] = None
+    custom_dockerfile_env: Optional[str] = None
+    custom_dockerfile_instance: Optional[str] = None
 
     @property
     def setup_env_script(self):
@@ -71,37 +142,57 @@ class TestSpec:
     @property
     def base_image_key(self):
         """
-        If docker_specs are present, the base image key includes a hash of the specs.
+        If docker_specs or custom_dockerfile_base are present, the base image key includes a hash of the specs.
+        
+        For custom dockerfiles, uses "custom" instead of language to avoid dependency on MAP_REPO_TO_EXT.
         """
-        if self.docker_specs != {}:
+        # Use "custom" for custom dockerfiles, otherwise use language from MAP_REPO_TO_EXT
+        if self.custom_dockerfile_base is not None:
+            lang_or_custom = "custom"
+        else:
+            lang_or_custom = MAP_REPO_TO_EXT[self.repo]
+        
+        if self.docker_specs != {} or self.custom_dockerfile_base is not None:
             hash_key = str(self.docker_specs)
+            if self.custom_dockerfile_base is not None:
+                hash_key += self.custom_dockerfile_base
             hash_object = hashlib.sha256()
             hash_object.update(hash_key.encode("utf-8"))
             hash_value = hash_object.hexdigest()
             val = hash_value[
                 :10
             ]  # 10 characters is still likely to be unique given only a few base images will be created
-            return f"sweb.base.{MAP_REPO_TO_EXT[self.repo]}.{self.arch}.{val}:{self.base_image_tag}"
+            return f"sweb.base.{lang_or_custom}.{self.arch}.{val}:{self.base_image_tag}"
         return (
-            f"sweb.base.{MAP_REPO_TO_EXT[self.repo]}.{self.arch}:{self.base_image_tag}"
+            f"sweb.base.{lang_or_custom}.{self.arch}:{self.base_image_tag}"
         )
 
     @property
     def env_image_key(self):
         """
         The key for the environment image is based on the hash of the environment script list.
-        If the environment script list changes, the image will be rebuilt automatically.
+        If the environment script list or custom_dockerfile_env changes, the image will be rebuilt automatically.
+
+        For custom dockerfiles, uses "custom" instead of language to avoid dependency on MAP_REPO_TO_EXT.
 
         Note that old images are not automatically deleted, so consider cleaning up old images periodically.
         """
+        # Use "custom" for custom dockerfiles, otherwise use language from MAP_REPO_TO_EXT
+        if self.custom_dockerfile_env is not None or self.custom_dockerfile_base is not None:
+            lang_or_custom = "custom"
+        else:
+            lang_or_custom = MAP_REPO_TO_EXT[self.repo]
+        
         hash_key = str(self.env_script_list)
         if self.docker_specs != {}:
             hash_key += str(self.docker_specs)
+        if self.custom_dockerfile_env is not None:
+            hash_key += self.custom_dockerfile_env
         hash_object = hashlib.sha256()
         hash_object.update(hash_key.encode("utf-8"))
         hash_value = hash_object.hexdigest()
         val = hash_value[:22]  # 22 characters is still very likely to be unique
-        return f"sweb.env.{MAP_REPO_TO_EXT[self.repo]}.{self.arch}.{val}:{self.env_image_tag}"
+        return f"sweb.env.{lang_or_custom}.{self.arch}.{val}:{self.env_image_tag}"
 
     @property
     def instance_image_key(self):
@@ -121,6 +212,17 @@ class TestSpec:
 
     @property
     def base_dockerfile(self):
+        if self.custom_dockerfile_base is not None:
+            # Format custom dockerfile with same variables as default
+            if self.arch == "arm64":
+                conda_arch = "aarch64"
+            else:
+                conda_arch = self.arch
+            return self.custom_dockerfile_base.format(
+                platform=self.platform,
+                conda_arch=conda_arch,
+                **{**DEFAULT_DOCKER_SPECS, **self.docker_specs},
+            )
         return get_dockerfile_base(
             self.platform,
             self.arch,
@@ -130,6 +232,14 @@ class TestSpec:
 
     @property
     def env_dockerfile(self):
+        if self.custom_dockerfile_env is not None:
+            # Format custom dockerfile with same variables as default
+            return self.custom_dockerfile_env.format(
+                platform=self.platform,
+                arch=self.arch,
+                base_image_key=self.base_image_key,
+                **{**DEFAULT_DOCKER_SPECS, **self.docker_specs},
+            )
         return get_dockerfile_env(
             self.platform,
             self.arch,
@@ -140,6 +250,12 @@ class TestSpec:
 
     @property
     def instance_dockerfile(self):
+        if self.custom_dockerfile_instance is not None:
+            # Format custom dockerfile with same variables as default
+            return self.custom_dockerfile_instance.format(
+                platform=self.platform,
+                env_image_name=self.env_image_key,
+            )
         return get_dockerfile_instance(self.platform, self.language, self.env_image_key)
 
     @property
@@ -216,6 +332,12 @@ def make_test_spec(
     eval_script_list = make_eval_script_list(
         instance, specs, env_name, repo_directory, base_commit, test_patch
     )
+    
+    # Extract and load custom dockerfile content if specified
+    custom_dockerfile_base = load_dockerfile_content(instance.get("dockerfile_base"))
+    custom_dockerfile_env = load_dockerfile_content(instance.get("dockerfile_env"))
+    custom_dockerfile_instance = load_dockerfile_content(instance.get("dockerfile_instance"))
+    
     return TestSpec(
         instance_id=instance_id,
         repo=repo,
@@ -232,4 +354,7 @@ def make_test_spec(
         base_image_tag=base_image_tag,
         env_image_tag=env_image_tag,
         instance_image_tag=instance_image_tag,
+        custom_dockerfile_base=custom_dockerfile_base,
+        custom_dockerfile_env=custom_dockerfile_env,
+        custom_dockerfile_instance=custom_dockerfile_instance,
     )
