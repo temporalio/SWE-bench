@@ -4,6 +4,8 @@
 
 This implementation allows benchmark tasks to specify custom Dockerfiles that override the default language-based Dockerfiles. Tasks can specify custom Dockerfiles for any of the three image layers (base, env, instance) while maintaining full backward compatibility with existing configurations.
 
+Additionally, you can override docker spec variables (like `ubuntu_version`, `python_version`) at runtime via CLI arguments.
+
 ## Features
 
 - ✅ **Per-task custom Dockerfiles**: Each task can specify its own Dockerfiles
@@ -283,5 +285,140 @@ python -m swebench.harness.run_evaluation --force-rebuild ...
 
 // ✗ Wrong
 "dockerfile_base": {"path": "...", "contents": "..."}
+```
+
+## CLI Docker Specs Override
+
+You can override docker spec variables at runtime using the `--docker_spec` CLI argument. This is useful for:
+- Testing different versions without modifying configs
+- Setting environment-specific values (e.g., from CI/CD variables)
+- Quickly experimenting with different configurations
+
+### Availability
+
+The `--docker_spec` argument is available in:
+- `swebench.harness.run_evaluation` - Main evaluation script
+- `swebench.inference.run_agent` - Agent execution script
+- `swebench.harness.prepare_images` - Image pre-building script
+
+### Usage
+
+The `--docker_spec` argument accepts `KEY=VALUE` pairs and can be used multiple times:
+
+```bash
+# Run evaluation with custom Ubuntu and Python versions
+python -m swebench.harness.run_evaluation \
+  --dataset_name dataset.jsonl \
+  --predictions_path predictions.jsonl \
+  --run_id my_run \
+  --docker_spec ubuntu_version=22.04 \
+  --docker_spec python_version=3.11
+
+# Run agent with custom specs
+python -m swebench.inference.run_agent \
+  --dataset_name dataset.jsonl \
+  --agent_name my_agent \
+  --agent_command 'echo "$PROBLEM_STATEMENT"' \
+  --output_dir ./results \
+  --docker_spec conda_version=23.9.0 \
+  --docker_spec nodejs_version=20.0.0
+
+# Pre-build images with custom specs
+python -m swebench.harness.prepare_images \
+  --dataset_name dataset.jsonl \
+  --instance_ids task-1 task-2 \
+  --docker_spec ubuntu_version=22.04 \
+  --docker_spec python_version=3.11
+```
+
+### How It Works
+
+1. **CLI specs override config specs**: If a docker spec is defined both in the benchmark config and via CLI, the CLI value takes precedence
+2. **Template variable substitution**: The values are substituted into Dockerfile templates using `{variable_name}` syntax
+3. **Unique image keys**: Different docker spec values result in different image keys, ensuring proper caching
+
+### Example
+
+Suppose your benchmark config has:
+```json
+{
+  "instance_id": "task-1",
+  "version": "1.0",
+  "docker_specs": {
+    "ubuntu_version": "20.04",
+    "python_version": "3.9"
+  }
+}
+```
+
+And your base Dockerfile template uses:
+```dockerfile
+FROM ubuntu:{ubuntu_version}
+RUN apt-get update && apt-get install -y python{python_version}
+```
+
+Running with CLI override:
+```bash
+python -m swebench.harness.run_evaluation \
+  --docker_spec ubuntu_version=22.04 \
+  --docker_spec python_version=3.11 \
+  ...
+```
+
+Results in:
+```dockerfile
+FROM ubuntu:22.04
+RUN apt-get update && apt-get install -y python3.11
+```
+
+### Common Docker Spec Variables
+
+Here are some commonly used docker spec variables in the default SWE-bench Dockerfiles:
+
+- `ubuntu_version` - Ubuntu version (e.g., "20.04", "22.04")
+- `python_version` - Python version (e.g., "3.9", "3.11")
+- `conda_version` - Miniconda version (e.g., "23.9.0")
+- `nodejs_version` - Node.js version (e.g., "18.0.0", "20.0.0")
+- `go_version` - Go version (e.g., "1.21")
+- `rust_version` - Rust version (e.g., "1.70")
+
+Check your repository's specs in `MAP_REPO_VERSION_TO_SPECS` for available variables.
+
+### Combining with Custom Dockerfiles
+
+You can use CLI docker specs together with custom Dockerfiles. For example:
+
+**Benchmark config:**
+```json
+{
+  "instance_id": "task-1",
+  "dockerfile_base": {
+    "contents": "FROM ubuntu:{ubuntu_version}\nRUN apt-get update"
+  }
+}
+```
+
+**CLI command:**
+```bash
+python -m swebench.harness.run_evaluation \
+  --docker_spec ubuntu_version=22.04 \
+  ...
+```
+
+The `{ubuntu_version}` placeholder in your custom Dockerfile will be replaced with `22.04`.
+
+### Environment Variable Support
+
+A common pattern is to use environment variables in CLI docker specs:
+
+```bash
+# In CI/CD or shell script
+export PYTHON_VERSION=3.11
+export UBUNTU_VERSION=22.04
+
+python -m swebench.harness.run_evaluation \
+  --docker_spec python_version=$PYTHON_VERSION \
+  --docker_spec ubuntu_version=$UBUNTU_VERSION \
+  ...
 ```
 

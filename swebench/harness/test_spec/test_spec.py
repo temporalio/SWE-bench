@@ -273,6 +273,7 @@ def get_test_specs_from_dataset(
     namespace: Optional[str] = None,
     instance_image_tag: str = LATEST,
     env_image_tag: str = LATEST,
+    cli_docker_specs: Optional[dict] = None,
 ) -> list[TestSpec]:
     """
     Idempotent function that converts a list of SWEbenchInstance objects to a list of TestSpec objects.
@@ -281,7 +282,7 @@ def get_test_specs_from_dataset(
         return cast(list[TestSpec], dataset)
     return list(
         map(
-            lambda x: make_test_spec(x, namespace, instance_image_tag, env_image_tag),
+            lambda x: make_test_spec(x, namespace, instance_image_tag, env_image_tag, cli_docker_specs=cli_docker_specs),
             cast(list[SWEbenchInstance], dataset),
         )
     )
@@ -294,6 +295,7 @@ def make_test_spec(
     env_image_tag: str = LATEST,
     instance_image_tag: str = LATEST,
     arch: str = "x86_64",
+    cli_docker_specs: Optional[dict] = None,
 ) -> TestSpec:
     if isinstance(instance, TestSpec):
         return instance
@@ -324,6 +326,10 @@ def make_test_spec(
     repo_directory = f"/{env_name}"
     specs = MAP_REPO_VERSION_TO_SPECS[repo][version]
     docker_specs = specs.get("docker_specs", {})
+    
+    # Merge CLI docker specs (CLI overrides config)
+    if cli_docker_specs:
+        docker_specs = {**docker_specs, **cli_docker_specs}
 
     repo_script_list = make_repo_script_list(
         specs, repo, repo_directory, base_commit, env_name
