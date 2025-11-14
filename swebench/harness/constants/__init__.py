@@ -134,8 +134,6 @@ DEFAULT_DOCKER_SPECS = {
     "python_version": "3.9",
     "ubuntu_version": "22.04",
 }
-if "ANTHROPIC_API_KEY" in os.environ:
-    DEFAULT_DOCKER_SPECS["anthropic_api_key"] = os.environ["ANTHROPIC_API_KEY"]
 FAIL_ONLY_REPOS = {
     "chartjs/Chart.js",
     "processing/p5.js",

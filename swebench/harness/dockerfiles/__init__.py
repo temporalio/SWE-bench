@@ -34,7 +34,7 @@ from swebench.harness.dockerfiles.rust import (
     _DOCKERFILE_INSTANCE_RUST,
 )
 from swebench.harness.dockerfiles.agnostic import (
-    _DOCKERFILE_BASE_AGNOSTIC,
+    _DOCKERFILE_ENV_AGNOSTIC,
     _DOCKERFILE_INSTANCE_AGNOSTIC,
 )
 
@@ -47,7 +47,6 @@ _DOCKERFILE_BASE = {
     "php": _DOCKERFILE_BASE_PHP,
     "rb": _DOCKERFILE_BASE_RUBY,
     "rs": _DOCKERFILE_BASE_RUST,
-    "agnostic": _DOCKERFILE_BASE_AGNOSTIC,
 }
 
 _DOCKERFILE_ENV = {
@@ -107,6 +106,8 @@ def get_dockerfile_instance(platform, language, env_image_name):
 
 
 __all__ = [
+    "_DOCKERFILE_ENV",
+    "_DOCKERFILE_ENV_AGNOSTIC",
     "get_dockerfile_base",
     "get_dockerfile_env",
     "get_dockerfile_instance",

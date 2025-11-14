@@ -76,6 +76,39 @@ Tasks can optionally specify custom Dockerfiles using a dict format with either 
 - Should start with `FROM {env_image_name}`
 - Can reference the env image using the `{env_image_name}` placeholder
 
+## Language-Specific Behavior
+
+SWE-bench has different Docker layer structures for different languages:
+
+### Python and JavaScript
+These languages use **all three layers**:
+1. **Base**: OS + system packages
+2. **Env**: Language environment (conda for Python, nvm for JavaScript) + dependencies
+3. **Instance**: Repository-specific setup
+
+### Go, C, Java, PHP, Ruby, Rust
+These languages use **two effective layers**:
+1. **Base**: OS + system packages + language installation (combines what would be base + env)
+2. **Instance**: Repository-specific setup
+
+**Important optimization**: When you specify `custom_dockerfile_base` for these languages (Go, C, Java, PHP, Ruby, Rust), the system automatically optimizes the env layer to just reuse the base image instead of rebuilding it. This uses the `_DOCKERFILE_ENV_AGNOSTIC` template which avoids the inefficiency of building the same image twice.
+
+**Example**: If you provide a custom Go base Dockerfile:
+```json
+{
+  "dockerfile_base": {"contents": "FROM alpine:3.18\nRUN apk add go git build-base"}
+}
+```
+
+The env layer will automatically use the agnostic env Dockerfile:
+```dockerfile
+FROM --platform=linux/amd64 sweb.base.custom.x86_64.abc123:latest
+
+WORKDIR /testbed/
+```
+
+This minimal env Dockerfile just references your custom base, avoiding unnecessary rebuilds. The system automatically detects which languages have dedicated env Dockerfiles (Python and JavaScript) and applies this optimization for all others.
+
 ## Example: Complete Custom Dockerfile Setup
 
 ### Directory Structure

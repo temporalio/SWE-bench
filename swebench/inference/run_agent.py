@@ -430,9 +430,6 @@ def main(
 
 
 if __name__ == "__main__":
-    if "anthropic_api_key" not in DEFAULT_DOCKER_SPECS:
-        raise ValueError("ANTHROPIC_API_KEY is not set in the environment")
-
     parser = ArgumentParser(
         description=__doc__,
         formatter_class=ArgumentDefaultsHelpFormatter,

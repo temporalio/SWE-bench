@@ -14,6 +14,8 @@ from swebench.harness.constants import (
     SWEbenchInstance,
 )
 from swebench.harness.dockerfiles import (
+    _DOCKERFILE_ENV,
+    _DOCKERFILE_ENV_AGNOSTIC,
     get_dockerfile_base,
     get_dockerfile_env,
     get_dockerfile_instance,
@@ -240,6 +242,19 @@ class TestSpec:
                 base_image_key=self.base_image_key,
                 **{**DEFAULT_DOCKER_SPECS, **self.docker_specs},
             )
+        
+        # For languages without separate env Dockerfiles (Go, C, Java, PHP, Ruby, Rust),
+        # if custom_dockerfile_base is set, just use the base image directly
+        # instead of rebuilding it with the default base Dockerfile.
+        # Check if language has a dedicated env Dockerfile in _DOCKERFILE_ENV
+        if self.custom_dockerfile_base is not None and self.language not in _DOCKERFILE_ENV:
+            # Return the agnostic env Dockerfile that just references the custom base image
+            # This avoids rebuilding the custom base image unnecessarily
+            return _DOCKERFILE_ENV_AGNOSTIC.format(
+                platform=self.platform,
+                base_image_key=self.base_image_key,
+            )
+        
         return get_dockerfile_env(
             self.platform,
             self.arch,

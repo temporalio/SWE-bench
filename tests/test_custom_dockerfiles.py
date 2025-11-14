@@ -13,6 +13,10 @@ import tempfile
 import unittest
 from pathlib import Path
 
+from swebench.harness.constants import (
+    MAP_REPO_TO_EXT,
+    MAP_REPO_VERSION_TO_SPECS,
+)
 from swebench.harness.test_spec.test_spec import (
     load_dockerfile_content,
     make_test_spec,
@@ -581,6 +585,83 @@ class TestPartialOverride(unittest.TestCase):
         # Env should be custom
         self.assertIsNotNone(spec.custom_dockerfile_env)
         self.assertIn("RUN echo test", spec.env_dockerfile)
+
+
+class TestNonPyJsLanguages(unittest.TestCase):
+    """Tests for languages without separate env Dockerfiles (Go, C, Java, etc.)"""
+
+    def test_custom_base_go_reuses_base_for_env(self):
+        """Test that Go with custom base doesn't rebuild for env layer"""
+        custom_base = "FROM alpine:3.18\nRUN apk add go git"
+        
+        instance = {
+            "repo": "golang/go",  # Go repository
+            "instance_id": "test-go-1",
+            "base_commit": "abc123",
+            "patch": "",
+            "test_patch": "",
+            "problem_statement": "Test",
+            "hints_text": "",
+            "created_at": "2023-01-01",
+            "version": "1.0",
+            "FAIL_TO_PASS": "[]",
+            "PASS_TO_PASS": "[]",
+            "environment_setup_commit": "abc123",
+            "dockerfile_base": {"contents": custom_base},
+        }
+        
+        # Register the repo
+        MAP_REPO_TO_EXT["golang/go"] = "go"
+        MAP_REPO_VERSION_TO_SPECS["golang/go"] = {
+            "1.0": {
+                "install": "echo 'test'",
+                "packages": "",
+                "pip_packages": [],
+                "test_cmd": ["echo 'test'"],
+            }
+        }
+        
+        spec = make_test_spec(instance)
+        
+        # Verify base uses custom dockerfile
+        self.assertIn("FROM alpine:3.18", spec.base_dockerfile)
+        
+        # Verify env dockerfile is minimal and just references base
+        self.assertIn(f"FROM --platform={spec.platform} {spec.base_image_key}", spec.env_dockerfile)
+        self.assertIn("WORKDIR /testbed/", spec.env_dockerfile)
+        # Should NOT rebuild everything from Ubuntu
+        self.assertNotIn("ubuntu", spec.env_dockerfile.lower())
+        
+    def test_custom_base_python_still_uses_env(self):
+        """Test that Python with custom base still uses proper env Dockerfile"""
+        custom_base = "FROM alpine:3.18\nRUN apk add python3 git"
+        
+        instance = {
+            "repo": "psf/requests",
+            "instance_id": "test-py-custom-base",
+            "base_commit": "abc123",
+            "patch": "",
+            "test_patch": "",
+            "problem_statement": "Test",
+            "hints_text": "",
+            "created_at": "2023-01-01",
+            "version": "2.0",
+            "FAIL_TO_PASS": "[]",
+            "PASS_TO_PASS": "[]",
+            "environment_setup_commit": "abc123",
+            "dockerfile_base": {"contents": custom_base},
+        }
+        
+        spec = make_test_spec(instance)
+        
+        # Verify base uses custom dockerfile
+        self.assertIn("FROM alpine:3.18", spec.base_dockerfile)
+        
+        # Verify env dockerfile uses the actual Python env Dockerfile
+        # (not the minimal one) because Python HAS a separate env Dockerfile
+        self.assertIn(f"FROM --platform={spec.platform} {spec.base_image_key}", spec.env_dockerfile)
+        self.assertIn("setup_env.sh", spec.env_dockerfile)
+        self.assertIn("conda activate testbed", spec.env_dockerfile)
 
 
 if __name__ == "__main__":
