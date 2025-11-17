@@ -34,6 +34,7 @@ from swebench.harness.dockerfiles.rust import (
     _DOCKERFILE_INSTANCE_RUST,
 )
 from swebench.harness.dockerfiles.agnostic import (
+    _DOCKERFILE_BASE_AGNOSTIC,
     _DOCKERFILE_ENV_AGNOSTIC,
     _DOCKERFILE_INSTANCE_AGNOSTIC,
 )
@@ -80,7 +81,9 @@ def get_dockerfile_base(platform, arch, language, **kwargs):
         del kwargs["_variant"]
         return _DOCKERFILE_BASE_JS_2.format(platform=platform, **kwargs)
 
-    return _DOCKERFILE_BASE[language].format(
+    # Fall back to agnostic dockerfile for custom/unknown languages
+    dockerfile = _DOCKERFILE_BASE.get(language, _DOCKERFILE_BASE_AGNOSTIC)
+    return dockerfile.format(
         platform=platform, conda_arch=conda_arch, **kwargs
     )
 
@@ -88,7 +91,13 @@ def get_dockerfile_base(platform, arch, language, **kwargs):
 def get_dockerfile_env(platform, arch, language, base_image_key, **kwargs):
     # Some languages do not have an environment Dockerfile. In those cases, the
     # base Dockerfile is used as the environment Dockerfile.
-    dockerfile = _DOCKERFILE_ENV.get(language, _DOCKERFILE_BASE[language])
+    # For custom/unknown languages, fall back to agnostic env dockerfile
+    if language in _DOCKERFILE_ENV:
+        dockerfile = _DOCKERFILE_ENV[language]
+    elif language in _DOCKERFILE_BASE:
+        dockerfile = _DOCKERFILE_BASE[language]
+    else:
+        dockerfile = _DOCKERFILE_ENV_AGNOSTIC
 
     if "_variant" in kwargs and kwargs["_variant"] == "js_2":
         del kwargs["_variant"]
@@ -100,12 +109,15 @@ def get_dockerfile_env(platform, arch, language, base_image_key, **kwargs):
 
 
 def get_dockerfile_instance(platform, language, env_image_name):
-    return _DOCKERFILE_INSTANCE[language].format(
+    # Fall back to agnostic dockerfile for custom/unknown languages
+    dockerfile = _DOCKERFILE_INSTANCE.get(language, _DOCKERFILE_INSTANCE["agnostic"])
+    return dockerfile.format(
         platform=platform, env_image_name=env_image_name
     )
 
 
 __all__ = [
+    "_DOCKERFILE_BASE_AGNOSTIC",
     "_DOCKERFILE_ENV",
     "_DOCKERFILE_ENV_AGNOSTIC",
     "get_dockerfile_base",

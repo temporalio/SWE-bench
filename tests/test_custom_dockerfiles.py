@@ -152,8 +152,8 @@ class TestCustomDockerfilesContents(unittest.TestCase):
 
         self.assertEqual(spec.custom_dockerfile_base, custom_base)
         self.assertIn("FROM ubuntu:20.04", spec.base_dockerfile)
-        # Custom dockerfiles should use "custom" in image key, not language
-        self.assertIn("sweb.base.custom.", spec.base_image_key)
+        # For hardcoded repos like psf/requests, should use actual language (py)
+        self.assertIn("sweb.base.py.", spec.base_image_key)
 
     def test_custom_env_contents(self):
         """Test custom env dockerfile with direct contents."""
@@ -431,9 +431,9 @@ class TestImageKeyGeneration(unittest.TestCase):
 
         # Verify different dockerfiles produce different keys
         self.assertNotEqual(spec1.base_image_key, spec2.base_image_key)
-        # Both should use "custom" in their keys
-        self.assertIn("sweb.base.custom.", spec1.base_image_key)
-        self.assertIn("sweb.base.custom.", spec2.base_image_key)
+        # For hardcoded repo (psf/requests), both should use "py" in their keys
+        self.assertIn("sweb.base.py.", spec1.base_image_key)
+        self.assertIn("sweb.base.py.", spec2.base_image_key)
 
     def test_same_custom_dockerfiles_same_keys(self):
         """Test that identical custom dockerfiles produce the same image keys."""
@@ -494,14 +494,15 @@ class TestImageKeyGeneration(unittest.TestCase):
 
         # Verify custom dockerfile differs from default
         self.assertNotEqual(spec_default.base_image_key, spec_custom.base_image_key)
-        # Default should use language (py), custom should use "custom"
+        # Both use language (py) since psf/requests is hardcoded
         self.assertIn("sweb.base.py.", spec_default.base_image_key)
-        self.assertIn("sweb.base.custom.", spec_custom.base_image_key)
+        self.assertIn("sweb.base.py.", spec_custom.base_image_key)
 
     def test_custom_uses_custom_identifier(self):
-        """Test that custom dockerfiles use 'custom' instead of language in image keys."""
+        """Test that non-hardcoded repos use 'custom' identifier in image keys."""
+        # Use a repo that's NOT in MAP_REPO_TO_EXT
         instance = {
-            "repo": "psf/requests",
+            "repo": "unknown-org/unknown-repo",
             "instance_id": "test-custom-identifier",
             "base_commit": "abc123",
             "patch": "",
@@ -509,22 +510,68 @@ class TestImageKeyGeneration(unittest.TestCase):
             "problem_statement": "Test",
             "hints_text": "",
             "created_at": "2023-01-01",
-            "version": "2.0",
+            "version": "1.0",
             "FAIL_TO_PASS": "[]",
             "PASS_TO_PASS": "[]",
             "environment_setup_commit": "abc123",
+            "test_cmd": ["pytest"],
             "dockerfile_base": {"contents": "FROM ubuntu:22.04"},
             "dockerfile_env": {"contents": "FROM {base_image_key}\nRUN echo test"},
         }
 
         spec = make_test_spec(instance)
 
-        # Both base and env should use "custom" since custom dockerfiles are specified
+        # Both base and env should use "custom" since repo is not hardcoded
         self.assertIn("sweb.base.custom.", spec.base_image_key)
         self.assertIn("sweb.env.custom.", spec.env_image_key)
-        # Should not contain language identifier
-        self.assertNotIn("sweb.base.py.", spec.base_image_key)
-        self.assertNotIn("sweb.env.py.", spec.env_image_key)
+
+
+class TestHashingFormattedDockerfiles(unittest.TestCase):
+    """Tests that image keys hash the formatted Dockerfile content, not templates."""
+
+    def test_hash_includes_formatted_content(self):
+        """Test that changing docker_specs changes the hash (because it changes the formatted Dockerfile)."""
+        template = "FROM ubuntu:{ubuntu_version}\nRUN echo test"
+        
+        instance1 = {
+            "repo": "test-org/test-repo",
+            "instance_id": "test-hash-1",
+            "base_commit": "abc123",
+            "patch": "",
+            "test_patch": "",
+            "problem_statement": "Test",
+            "hints_text": "",
+            "created_at": "2023-01-01",
+            "version": "1.0",
+            "FAIL_TO_PASS": "[]",
+            "PASS_TO_PASS": "[]",
+            "environment_setup_commit": "abc123",
+            "test_cmd": ["pytest"],
+            "dockerfile_base": {"contents": template},
+        }
+
+        instance2 = {
+            **instance1,
+            "instance_id": "test-hash-2",
+        }
+
+        # Both instances have the same template, same default docker_specs
+        spec1 = make_test_spec(instance1)
+        spec2 = make_test_spec(instance2)
+        
+        # Should have the same hash since formatted content is identical
+        self.assertEqual(spec1.base_image_key, spec2.base_image_key)
+        
+        # Now create an instance with different ubuntu_version
+        spec3 = make_test_spec(instance1, cli_docker_specs={"ubuntu_version": "20.04"})
+        spec4 = make_test_spec(instance2, cli_docker_specs={"ubuntu_version": "22.04"})
+        
+        # Should have different hashes since formatted content differs
+        self.assertNotEqual(spec3.base_image_key, spec4.base_image_key)
+        
+        # Verify the formatted content actually differs
+        self.assertIn("ubuntu:20.04", spec3.base_dockerfile)
+        self.assertIn("ubuntu:22.04", spec4.base_dockerfile)
 
 
 class TestPartialOverride(unittest.TestCase):

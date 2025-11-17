@@ -13,6 +13,7 @@ Additionally, you can override docker spec variables (like `ubuntu_version`, `py
 - ✅ **Backward compatible**: Existing tasks without custom Dockerfiles continue to work unchanged
 - ✅ **Unique image keys**: Different custom Dockerfiles automatically get unique Docker image keys
 - ✅ **Full validation**: Clear error messages for invalid configurations
+- ✅ **Custom repos**: Support for repositories not in the hardcoded configuration maps
 
 ## Configuration Format
 
@@ -58,6 +59,46 @@ Tasks can optionally specify custom Dockerfiles using a dict format with either 
 2. Specifying both `path` and `contents` in the same dict is an error
 3. All dockerfile fields (`dockerfile_base`, `dockerfile_env`, `dockerfile_instance`) are **optional**
 4. If a dockerfile field is not specified, the system falls back to the default language-based Dockerfile
+
+## Using Custom Repositories
+
+SWE-bench has hardcoded configuration for many popular open-source repositories. However, with custom Dockerfiles, you can now use **any repository** without modifying the SWE-bench codebase.
+
+### Requirements for Custom Repos
+
+For repositories not in the hardcoded maps (`MAP_REPO_TO_EXT` and `MAP_REPO_VERSION_TO_SPECS`), you should **provide custom Dockerfiles** (at least `dockerfile_base` is recommended).
+
+### Example: Using a Custom Repository
+
+```json
+{
+  "repo": "my-org/my-custom-repo",
+  "instance_id": "my-org__my-custom-repo-1",
+  "base_commit": "abc123",
+  "version": "1.0",
+  "test_cmd": ["pytest tests/"],
+  "dockerfile_base": {
+    "path": "dockerfiles/python_base.Dockerfile"
+  },
+  "dockerfile_env": {
+    "path": "dockerfiles/python_env.Dockerfile"
+  }
+}
+```
+
+### What Happens Without Hardcoded Configuration
+
+When using a custom repo not in the hardcoded maps:
+
+1. **Specs lookup is safe**: Empty specs are used (no `pre_install`, `install`, `build`, etc. commands from hardcoded config)
+2. **Language defaults**: Falls back to `"custom"` for unknown repositories
+3. **Scripts**: Uses generic setup scripts
+4. **Dockerfiles**: 
+   - If you provide custom Dockerfiles, those are used
+   - Otherwise, falls back to **agnostic Dockerfiles** - generic Ubuntu-based containers with common build tools (git, curl, wget, build-essential, etc.)
+   - The agnostic Dockerfiles work for many use cases but lack language-specific tooling (Python, Node.js, etc.)
+
+**Recommendation**: Provide custom Dockerfiles for non-hardcoded repos to ensure proper environment setup with the tools and dependencies your project needs.
 
 ## Dockerfile Types
 

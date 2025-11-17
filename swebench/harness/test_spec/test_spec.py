@@ -146,55 +146,40 @@ class TestSpec:
         """
         If docker_specs or custom_dockerfile_base are present, the base image key includes a hash of the specs.
         
-        For custom dockerfiles, uses "custom" instead of language to avoid dependency on MAP_REPO_TO_EXT.
+        Otherwise, the base image key is just the language and arch.
         """
-        # Use "custom" for custom dockerfiles, otherwise use language from MAP_REPO_TO_EXT
-        if self.custom_dockerfile_base is not None:
-            lang_or_custom = "custom"
-        else:
-            lang_or_custom = MAP_REPO_TO_EXT[self.repo]
-        
         if self.docker_specs != {} or self.custom_dockerfile_base is not None:
-            hash_key = str(self.docker_specs)
-            if self.custom_dockerfile_base is not None:
-                hash_key += self.custom_dockerfile_base
+            # Hash the formatted Dockerfile content, not the template
+            # This ensures the hash represents the actual Dockerfile that will be built
+            hash_key = self.base_dockerfile
             hash_object = hashlib.sha256()
             hash_object.update(hash_key.encode("utf-8"))
             hash_value = hash_object.hexdigest()
             val = hash_value[
                 :10
             ]  # 10 characters is still likely to be unique given only a few base images will be created
-            return f"sweb.base.{lang_or_custom}.{self.arch}.{val}:{self.base_image_tag}"
+            return f"sweb.base.{self.language}.{self.arch}.{val}:{self.base_image_tag}"
         return (
-            f"sweb.base.{lang_or_custom}.{self.arch}:{self.base_image_tag}"
+            f"sweb.base.{self.language}.{self.arch}:{self.base_image_tag}"
         )
 
     @property
     def env_image_key(self):
         """
-        The key for the environment image is based on the hash of the environment script list.
-        If the environment script list or custom_dockerfile_env changes, the image will be rebuilt automatically.
-
-        For custom dockerfiles, uses "custom" instead of language to avoid dependency on MAP_REPO_TO_EXT.
+        The key for the environment image is based on the hash of the environment script list and Dockerfile.
+        If either changes, the image will be rebuilt automatically.
 
         Note that old images are not automatically deleted, so consider cleaning up old images periodically.
         """
-        # Use "custom" for custom dockerfiles, otherwise use language from MAP_REPO_TO_EXT
-        if self.custom_dockerfile_env is not None or self.custom_dockerfile_base is not None:
-            lang_or_custom = "custom"
-        else:
-            lang_or_custom = MAP_REPO_TO_EXT[self.repo]
-        
+        # Hash both the setup scripts and the formatted Dockerfile
+        # The env_dockerfile already incorporates docker_specs in its formatting
         hash_key = str(self.env_script_list)
-        if self.docker_specs != {}:
-            hash_key += str(self.docker_specs)
-        if self.custom_dockerfile_env is not None:
-            hash_key += self.custom_dockerfile_env
+        hash_key += self.env_dockerfile
         hash_object = hashlib.sha256()
         hash_object.update(hash_key.encode("utf-8"))
         hash_value = hash_object.hexdigest()
         val = hash_value[:22]  # 22 characters is still very likely to be unique
-        return f"sweb.env.{lang_or_custom}.{self.arch}.{val}:{self.env_image_tag}"
+        return f"sweb.env.{self.language}.{self.arch}.{val}:{self.env_image_tag}"
 
     @property
     def instance_image_key(self):
@@ -339,7 +324,8 @@ def make_test_spec(
 
     env_name = "testbed"
     repo_directory = f"/{env_name}"
-    specs = MAP_REPO_VERSION_TO_SPECS[repo][version]
+    # Safe lookup for specs - returns empty dict if repo/version not in hardcoded map
+    specs = MAP_REPO_VERSION_TO_SPECS.get(repo, {}).get(version, {})
     docker_specs = specs.get("docker_specs", {})
     
     # Merge CLI docker specs (CLI overrides config)
@@ -369,7 +355,7 @@ def make_test_spec(
         arch=arch,
         FAIL_TO_PASS=fail_to_pass,
         PASS_TO_PASS=pass_to_pass,
-        language=MAP_REPO_TO_EXT[repo],
+        language=MAP_REPO_TO_EXT.get(repo, "custom"),
         docker_specs=docker_specs,
         namespace=namespace,
         base_image_tag=base_image_tag,
