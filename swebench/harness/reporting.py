@@ -7,7 +7,6 @@ from swebench.harness.constants import (
     KEY_INSTANCE_ID,
     KEY_MODEL,
     KEY_PREDICTION,
-    KEY_RUN_ID,
     RUN_EVALUATION_LOG_DIR,
     LOG_REPORT,
 )
@@ -62,8 +61,6 @@ def make_run_report(
             empty_patch_ids.add(instance_id)
             continue
 
-        if run_id != prediction[KEY_RUN_ID]:
-            raise ValueError(f"Run ID mismatch: {run_id} != {prediction[KEY_RUN_ID]}")
         report_file = (
             RUN_EVALUATION_LOG_DIR / run_id / prediction[KEY_INSTANCE_ID] / LOG_REPORT
         )

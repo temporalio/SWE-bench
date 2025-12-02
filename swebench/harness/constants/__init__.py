@@ -74,7 +74,6 @@ class EvalType(Enum):
 KEY_INSTANCE_ID = "instance_id"
 KEY_MODEL = "model_name_or_path"
 KEY_PREDICTION = "model_patch"
-KEY_RUN_ID = "run_id"
 
 # Constants - Harness
 DOCKER_PATCH = "/tmp/patch.diff"

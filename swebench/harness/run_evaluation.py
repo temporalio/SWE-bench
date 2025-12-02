@@ -24,7 +24,6 @@ from swebench.harness.constants import (
     KEY_INSTANCE_ID,
     KEY_MODEL,
     KEY_PREDICTION,
-    KEY_RUN_ID,
     LOG_EVAL_METRICS,
     LOG_REPORT,
     LOG_INSTANCE,
@@ -80,6 +79,7 @@ def run_instance(
     rm_image: bool,
     force_rebuild: bool,
     client: docker.DockerClient,
+    run_id: str,
     timeout: int | None = None,
     rewrite_reports: bool = False,
     instance: dict | None = None,
@@ -98,7 +98,7 @@ def run_instance(
     """
     # Set up logging directory
     instance_id = test_spec.instance_id
-    run_id = pred[KEY_RUN_ID].replace("/", "__")
+    run_id = run_id.replace("/", "__")
     log_dir = RUN_EVALUATION_LOG_DIR / run_id / instance_id
 
     # Set up report file
@@ -324,6 +324,7 @@ def run_instances(
     force_rebuild: bool,
     max_workers: int,
     timeout: int,
+    run_id: str,
     namespace: str | None = "swebench",
     instance_image_tag: str = "latest",
     env_image_tag: str = "latest",
@@ -384,6 +385,7 @@ def run_instances(
                 ),
                 force_rebuild,
                 client,
+                run_id,
                 timeout,
                 rewrite_reports,
                 instance,
@@ -420,6 +422,7 @@ def get_dataset_from_preds(
     instance_ids: list,
     predictions: dict,
     rewrite_reports: bool,
+    run_id: str,
     exclude_completed: bool = True,
 ):
     """
@@ -460,7 +463,7 @@ def get_dataset_from_preds(
             prediction = predictions[instance[KEY_INSTANCE_ID]]
             test_output_file = (
                 RUN_EVALUATION_LOG_DIR
-                / prediction[KEY_RUN_ID].replace("/", "__")
+                / run_id.replace("/", "__")
                 / prediction[KEY_INSTANCE_ID]
                 / "test_output.txt"
             )
@@ -483,7 +486,7 @@ def get_dataset_from_preds(
         prediction = predictions[instance[KEY_INSTANCE_ID]]
         report_file = (
             RUN_EVALUATION_LOG_DIR
-            / prediction[KEY_RUN_ID].replace("/", "__")
+            / run_id.replace("/", "__")
             / prediction[KEY_INSTANCE_ID]
             / LOG_REPORT
         )
@@ -603,7 +606,7 @@ def main(
 
     # get dataset from predictions
     dataset = get_dataset_from_preds(
-        dataset_name, split, instance_ids, predictions, rewrite_reports
+        dataset_name, split, instance_ids, predictions, rewrite_reports, run_id
     )
     full_dataset = load_swebench_dataset(dataset_name, split, instance_ids)
 
@@ -645,6 +648,7 @@ def main(
             force_rebuild,
             max_workers,
             timeout,
+            run_id,
             namespace=namespace,
             instance_image_tag=instance_image_tag,
             env_image_tag=env_image_tag,

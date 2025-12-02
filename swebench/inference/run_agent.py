@@ -169,7 +169,6 @@ def run_agent_on_instance(
                 KEY_PREDICTION: model_patch,
                 "agent_command": actual_command,
                 "agent_output": agent_output,
-                "run_id": run_id,
             }
             
         finally:
@@ -307,7 +306,6 @@ def run_agent_inference(
                         error_result = {
                             KEY_INSTANCE_ID: instance_id,
                             KEY_PREDICTION: "",
-                            "run_id": run_id,
                             "error": str(e),
                         }
                         print(json.dumps(error_result), file=f, flush=True)
