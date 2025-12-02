@@ -18,6 +18,7 @@ import os
 BASE_IMAGE_BUILD_DIR = Path("logs/build_images/base")
 ENV_IMAGE_BUILD_DIR = Path("logs/build_images/env")
 INSTANCE_IMAGE_BUILD_DIR = Path("logs/build_images/instances")
+RUN_AGENT_INFERENCE_LOG_DIR = Path("logs/run_agent_inference")
 RUN_EVALUATION_LOG_DIR = Path("logs/run_evaluation")
 RUN_VALIDATION_LOG_DIR = Path("logs/run_validation")
 
@@ -73,6 +74,7 @@ class EvalType(Enum):
 KEY_INSTANCE_ID = "instance_id"
 KEY_MODEL = "model_name_or_path"
 KEY_PREDICTION = "model_patch"
+KEY_RUN_ID = "run_id"
 
 # Constants - Harness
 DOCKER_PATCH = "/tmp/patch.diff"
