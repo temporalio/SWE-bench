@@ -32,14 +32,11 @@ from tqdm.auto import tqdm
 from swebench.harness.constants import (
     DOCKER_USER,
     DOCKER_WORKDIR,
-    DEFAULT_DOCKER_SPECS,
     KEY_INSTANCE_ID,
-    KEY_MODEL,
     KEY_PREDICTION,
     MAP_REPO_TO_EXT,
     MAP_REPO_VERSION_TO_SPECS,
     RUN_AGENT_INFERENCE_LOG_DIR,
-    RUN_EVALUATION_LOG_DIR,
     UTF8,
 )
 from swebench.harness.docker_build import build_container, build_env_images, setup_logger
@@ -52,6 +49,20 @@ logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(mess
 logger = logging.getLogger(__name__)
 
 
+def get_agent_log_dir(dataset_name: str) -> Path:
+    """
+    Compute the log directory from the dataset name.
+    
+    Examples:
+        - "SWE-bench/SWE-bench_Lite" -> logs/run_agent_inference/SWE-bench_Lite
+        - "path/to/dataset.jsonl" -> logs/run_agent_inference/dataset
+        - "path/to/my_benchmark/" -> logs/run_agent_inference/my_benchmark
+    """
+    dataset_path = Path(dataset_name.rstrip('/'))
+    benchmark_name = dataset_path.stem if '.' in dataset_path.name else dataset_path.name
+    return RUN_AGENT_INFERENCE_LOG_DIR / benchmark_name
+
+
 def run_agent_on_instance(
     test_spec: TestSpec,
     instance: Dict,
@@ -61,6 +72,7 @@ def run_agent_on_instance(
     timeout: int = 1800,
     force_rebuild: bool = False,
     agents_md: Optional[str] = None,
+    log_base_dir: Optional[Path] = None,
 ) -> Dict:
     """
     Run the coding agent on a single instance.
@@ -74,6 +86,7 @@ def run_agent_on_instance(
         timeout (int): Timeout in seconds for agent execution
         force_rebuild (bool): Whether to force rebuild container images
         agents_md (Optional[str]): Path to file to copy as AGENTS.md in container
+        log_base_dir (Optional[Path]): Base directory for logs (includes benchmark name)
         
     Returns:
         Dict: Result containing instance_id, model_patch, and metadata
@@ -81,7 +94,9 @@ def run_agent_on_instance(
     instance_id = instance[KEY_INSTANCE_ID]
     
     # Set up logging
-    log_dir = RUN_AGENT_INFERENCE_LOG_DIR
+    if log_base_dir is None:
+        log_base_dir = RUN_AGENT_INFERENCE_LOG_DIR
+    log_dir = log_base_dir
     log_dir.mkdir(parents=True, exist_ok=True)
     logger_instance = setup_logger(instance_id, log_dir / f"{run_id}-{instance_id}.log")
     
@@ -212,6 +227,7 @@ def run_agent_inference(
     existing_ids: Optional[set] = None,
     agents_md: Optional[str] = None,
     cli_docker_specs: Optional[dict] = None,
+    log_base_dir: Optional[Path] = None,
 ) -> None:
     """
     Run agent inference on the entire dataset.
@@ -229,6 +245,7 @@ def run_agent_inference(
         env_image_tag (str): Tag for environment images
         existing_ids (Optional[set]): Set of already processed instance IDs
         agents_md (Optional[str]): Path to file to copy as AGENTS.md in container
+        log_base_dir (Optional[Path]): Base directory for logs (includes benchmark name)
     """
     if existing_ids is None:
         existing_ids = set()
@@ -281,7 +298,8 @@ def run_agent_inference(
             for test_spec, instance in tqdm(test_specs, desc="Processing instances"):
                 result = run_agent_on_instance(
                     test_spec, instance, agent_command, client, run_id, 
-                    timeout=timeout, force_rebuild=force_rebuild, agents_md=agents_md
+                    timeout=timeout, force_rebuild=force_rebuild, agents_md=agents_md,
+                    log_base_dir=log_base_dir
                 )
                 print(json.dumps(result), file=f, flush=True)
         else:
@@ -292,7 +310,7 @@ def run_agent_inference(
                     future = executor.submit(
                         run_agent_on_instance,
                         test_spec, instance, agent_command, client, run_id,
-                        timeout, force_rebuild, agents_md
+                        timeout, force_rebuild, agents_md, log_base_dir
                     )
                     futures[future] = instance[KEY_INSTANCE_ID]
                 
@@ -345,6 +363,9 @@ def main(
     if "$PROBLEM_STATEMENT" not in agent_command:
         raise ValueError("Agent command must contain $PROBLEM_STATEMENT placeholder")
     
+    # Compute benchmark-specific log directory
+    log_base_dir = get_agent_log_dir(dataset_name)
+
     # Load repo specs override if provided
     if repo_specs_override:
         try:
@@ -417,6 +438,7 @@ def main(
         existing_ids=existing_ids,
         agents_md=agents_md,
         cli_docker_specs=cli_docker_specs,
+        log_base_dir=log_base_dir,
     )
     
     logger.info(f"Agent inference completed. Results written to {output_file}")
