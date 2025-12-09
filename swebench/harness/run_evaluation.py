@@ -73,20 +73,6 @@ GIT_APPLY_CMDS = [
 ]
 
 
-def get_eval_log_dir(dataset_name: str) -> Path:
-    """
-    Compute the log directory from the dataset name.
-    
-    Examples:
-        - "SWE-bench/SWE-bench_Lite" -> logs/run_evaluation/SWE-bench_Lite
-        - "path/to/dataset.jsonl" -> logs/run_evaluation/dataset
-        - "path/to/my_benchmark/" -> logs/run_evaluation/my_benchmark
-    """
-    dataset_path = Path(dataset_name.rstrip('/'))
-    benchmark_name = dataset_path.stem if '.' in dataset_path.name else dataset_path.name
-    return RUN_EVALUATION_LOG_DIR / benchmark_name
-
-
 def run_instance(
     test_spec: TestSpec,
     pred: dict,
@@ -97,7 +83,6 @@ def run_instance(
     timeout: int | None = None,
     rewrite_reports: bool = False,
     instance: dict | None = None,
-    log_base_dir: Path | None = None,
 ) -> dict:
     """
     Run a single instance with the given prediction.
@@ -110,14 +95,11 @@ def run_instance(
         client (docker.DockerClient): Docker client
         timeout (int): Timeout for running tests
         rewrite_reports (bool): True if eval run is just to reformat existing report
-        log_base_dir (Path): Base directory for logs (includes benchmark name)
     """
     # Set up logging directory
     instance_id = test_spec.instance_id
     run_id = run_id.replace("/", "__")
-    if log_base_dir is None:
-        log_base_dir = RUN_EVALUATION_LOG_DIR
-    log_dir = log_base_dir / run_id / instance_id
+    log_dir = RUN_EVALUATION_LOG_DIR / run_id / instance_id
 
     # Set up report file
     report_path = log_dir / LOG_REPORT
@@ -352,7 +334,6 @@ def run_instances(
     env_image_tag: str = "latest",
     rewrite_reports: bool = False,
     cli_docker_specs: dict | None = None,
-    log_base_dir: Path | None = None,
 ):
     """
     Run all instances for the given predictions in parallel.
@@ -365,7 +346,6 @@ def run_instances(
         force_rebuild (bool): Force rebuild images
         max_workers (int): Maximum number of workers
         timeout (int): Timeout for running tests
-        log_base_dir (Path): Base directory for logs (includes benchmark name)
     """
     client = docker.from_env()
     test_specs = list(
@@ -413,7 +393,6 @@ def run_instances(
                 timeout,
                 rewrite_reports,
                 instance,
-                log_base_dir,
             )
         )
 
@@ -449,15 +428,12 @@ def get_dataset_from_preds(
     rewrite_reports: bool,
     run_id: str,
     exclude_completed: bool = True,
-    log_base_dir: Path | None = None,
 ):
     """
     Return only instances that have predictions and are in the dataset.
     If instance_ids is provided, only return instances with those IDs.
     If exclude_completed is True, only return instances that have not been run yet.
     """
-    if log_base_dir is None:
-        log_base_dir = RUN_EVALUATION_LOG_DIR
     # load dataset
     dataset = load_swebench_dataset(dataset_name, split)
     dataset_ids = {i[KEY_INSTANCE_ID] for i in dataset}
@@ -490,7 +466,7 @@ def get_dataset_from_preds(
                 continue
             prediction = predictions[instance[KEY_INSTANCE_ID]]
             test_output_file = (
-                log_base_dir
+                RUN_EVALUATION_LOG_DIR
                 / run_id.replace("/", "__")
                 / prediction[KEY_INSTANCE_ID]
                 / "test_output.txt"
@@ -513,7 +489,7 @@ def get_dataset_from_preds(
             continue
         prediction = predictions[instance[KEY_INSTANCE_ID]]
         report_file = (
-            log_base_dir
+            RUN_EVALUATION_LOG_DIR
             / run_id.replace("/", "__")
             / prediction[KEY_INSTANCE_ID]
             / LOG_REPORT
@@ -584,9 +560,6 @@ def main(
         )
         return
 
-    # Compute benchmark-specific log directory
-    log_base_dir = get_eval_log_dir(dataset_name)
-
     # Load repo specs override if provided
     if repo_specs_override:
         try:
@@ -637,8 +610,7 @@ def main(
 
     # get dataset from predictions
     dataset = get_dataset_from_preds(
-        dataset_name, split, instance_ids, predictions, rewrite_reports, run_id,
-        log_base_dir=log_base_dir,
+        dataset_name, split, instance_ids, predictions, rewrite_reports, run_id
     )
     full_dataset = load_swebench_dataset(dataset_name, split, instance_ids)
 
@@ -686,7 +658,6 @@ def main(
             env_image_tag=env_image_tag,
             rewrite_reports=rewrite_reports,
             cli_docker_specs=cli_docker_specs,
-            log_base_dir=log_base_dir,
         )
 
     # clean images + make final report
@@ -700,7 +671,6 @@ def main(
         instance_image_tag,
         env_image_tag,
         report_dir,
-        log_base_dir,
     )
 
 
