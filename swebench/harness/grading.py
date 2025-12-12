@@ -268,6 +268,7 @@ def get_eval_report(
         "patch_exists": False,
         "patch_successfully_applied": False,
         "resolved": False,
+        "timed_out": prediction.get("timed_out", False),
     }
 
     # Check if the model patch exists

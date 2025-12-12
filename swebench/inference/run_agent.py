@@ -20,11 +20,12 @@ import json
 import logging
 import os
 import tempfile
+import threading
 import traceback
 from argparse import ArgumentParser, ArgumentDefaultsHelpFormatter
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path, PurePosixPath
-from typing import Dict, List, Optional
+from typing import Dict, List, Optional, Tuple
 
 import docker
 from tqdm.auto import tqdm
@@ -50,6 +51,65 @@ from swebench.inference.make_datasets.utils import extract_diff
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
 logger = logging.getLogger(__name__)
+
+
+class ExecTimeoutError(Exception):
+    """Raised when a container exec command times out."""
+    pass
+
+
+def exec_run_with_timeout(
+    container,
+    cmd: str,
+    timeout: int,
+    workdir: str,
+    user: str,
+) -> Tuple[int, Tuple[Optional[bytes], Optional[bytes]]]:
+    """
+    Run a command in a container with a timeout.
+    
+    Args:
+        container: Docker container object
+        cmd: Command to run
+        timeout: Timeout in seconds
+        workdir: Working directory in container
+        user: User to run command as
+        
+    Returns:
+        Tuple of (exit_code, (stdout, stderr))
+        
+    Raises:
+        ExecTimeoutError: If the command times out
+    """
+    result_holder = {"result": None, "exception": None}
+    
+    def run_exec():
+        try:
+            result_holder["result"] = container.exec_run(
+                cmd=cmd,
+                workdir=workdir,
+                user=user,
+                stream=False,
+                demux=True,
+            )
+        except Exception as e:
+            result_holder["exception"] = e
+    
+    thread = threading.Thread(target=run_exec)
+    thread.start()
+    thread.join(timeout=timeout)
+    
+    if thread.is_alive():
+        # Timeout occurred - try to kill the running process
+        # We can't easily kill a specific exec, but we can signal the container
+        # The thread will eventually complete when we stop/remove the container later
+        raise ExecTimeoutError(f"Command timed out after {timeout} seconds")
+    
+    if result_holder["exception"]:
+        raise result_holder["exception"]
+    
+    result = result_holder["result"]
+    return result.exit_code, result.output
 
 
 def run_agent_on_instance(
@@ -127,26 +187,36 @@ def run_agent_on_instance(
             actual_command = agent_command.replace("$PROBLEM_STATEMENT", problem_file_path)
             logger_instance.info(f"Running agent command: {actual_command}")
             
-            # Execute the agent command in the container
-            result = container.exec_run(
-                cmd=f"bash -c 'source /root/.nvm/nvm.sh && export IS_SANDBOX=1 {actual_command}'",
-                workdir=DOCKER_WORKDIR,
-                user=DOCKER_USER,
-                stream=False,
-                demux=True,
-            )
+            # Execute the agent command in the container with timeout
+            exec_timeout = 600  # 10 minutes
+            cmd = f"bash -c 'source /root/.nvm/nvm.sh && export IS_SANDBOX=1 {actual_command}'"
+            timed_out = False
             
-            if result.exit_code == 0:
-                logger_instance.info("Agent command completed successfully")
-                stdout = result.output[0].decode(UTF8) if result.output[0] else ""
-                stderr = result.output[1].decode(UTF8) if result.output[1] else ""
-                agent_output = stdout + stderr
-            else:
-                logger_instance.error(f"Agent command failed with exit code {result.exit_code}")
-                stdout = result.output[0].decode(UTF8) if result.output[0] else ""
-                stderr = result.output[1].decode(UTF8) if result.output[1] else ""
-                agent_output = stdout + stderr
-                logger_instance.error(f"Agent output: {agent_output}")
+            try:
+                exit_code, output = exec_run_with_timeout(
+                    container=container,
+                    cmd=cmd,
+                    timeout=exec_timeout,
+                    workdir=DOCKER_WORKDIR,
+                    user=DOCKER_USER,
+                )
+                
+                if exit_code == 0:
+                    logger_instance.info("Agent command completed successfully")
+                    stdout = output[0].decode(UTF8) if output[0] else ""
+                    stderr = output[1].decode(UTF8) if output[1] else ""
+                    agent_output = stdout + stderr
+                else:
+                    logger_instance.error(f"Agent command failed with exit code {exit_code}")
+                    stdout = output[0].decode(UTF8) if output[0] else ""
+                    stderr = output[1].decode(UTF8) if output[1] else ""
+                    agent_output = stdout + stderr
+                    logger_instance.error(f"Agent output: {agent_output}")
+                    
+            except ExecTimeoutError as e:
+                timed_out = True
+                logger_instance.error(f"Agent command timed out after {exec_timeout} seconds")
+                agent_output = f"TIMEOUT: Command did not complete within {exec_timeout} seconds"
                 
             # Get git diff to see what changes the agent made
             git_diff_result = container.exec_run(
@@ -164,12 +234,15 @@ def run_agent_on_instance(
                 
             logger_instance.info(f"Extracted patch length: {len(model_patch)} chars")
             
-            return {
+            result = {
                 KEY_INSTANCE_ID: instance_id,
                 KEY_PREDICTION: model_patch,
                 "agent_command": actual_command,
                 "agent_output": agent_output,
             }
+            if timed_out:
+                result["timed_out"] = True
+            return result
             
         finally:
             # Clean up temporary file
