@@ -110,15 +110,12 @@ def _load_dataset_directory(dirpath: Path) -> list:
 
 
 class EvaluationError(Exception):
-    def __init__(self, instance_id, message, logger):
+    def __init__(self, instance_id, message, log_file):
         super().__init__(message)
         self.instance_id = instance_id
-        self.log_file = logger.log_file
-        self.logger = logger
+        self.log_file = log_file
 
     def __str__(self):
-        log_msg = traceback.format_exc()
-        self.logger.info(log_msg)
         return (
             f"{self.instance_id}: {super().__str__()}\n"
             f"Check ({self.log_file}) for more information."

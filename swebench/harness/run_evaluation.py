@@ -246,10 +246,11 @@ def run_instance(
             logger.info(f"Test output for {instance_id} written to {test_output_path}")
             if timed_out:
                 f.write(f"\n\nTimeout error: {timeout} seconds exceeded.")
+                logger.info(f"Test timed out after {timeout} seconds.")
                 raise EvaluationError(
                     instance_id,
                     f"Test timed out after {timeout} seconds.",
-                    logger,
+                    logger.log_file,
                 )
 
         # Read eval metrics from container
